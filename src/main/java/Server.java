@@ -2,22 +2,38 @@ import java.io.*;
 import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.LocalDateTime;
-import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class Server {
     private ServerSocket server;
+    Map<String, ConcurrentHashMap<String, Handler>> handlers;
     private final int port;
     private final ExecutorService poolExecutor;
-    private final static List<String> validPaths = List.of("/index.html", "/spring.svg", "/spring.png",
-            "/resources.html", "/styles.css", "/app.js", "/links.html", "/forms.html",
-            "/classic.html", "/events.html", "/events.js");
+
     public Server(int port) {
         poolExecutor = Executors.newFixedThreadPool(64);
         this.port = port;
+        handlers = new ConcurrentHashMap<>();
     }
+
+    public void addHandler(String method, String filename, Handler handler) {
+        if (!handlers.containsKey(method)) {
+            handlers.put(method, new ConcurrentHashMap<>());
+        }
+        handlers.get(method).put(filename, handler);
+        File file = new File("./public/" + filename);
+        try {
+            if (file.createNewFile()) {
+                System.out.println("Add new Handler: " + filename);
+            }
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+    }
+
 
     public void start() {
         try {
@@ -52,37 +68,31 @@ public class Server {
                 }
 
                 final var path = parts[1];
-                if (!validPaths.contains(path)) {
-                    out.write((
-                            "HTTP/1.1 404 Not Found\r\n" +
-                                    "Content-Length: 0\r\n" +
-                                    "Connection: close\r\n" +
-                                    "\r\n"
-                    ).getBytes());
-                    out.flush();
-                    return;
-                }
 
-                final var filePath = Path.of(".", "public", path);
+                Request request = new Request(parts[0], path, handlers);
+                send(request, out);
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    public boolean send(Request request, BufferedOutputStream out) {
+        try {
+            if (handlers.containsKey(request.getMethod()) &&
+                    handlers.get(request.getMethod()).containsKey(request.getPath())) {
+                out.write((
+                        "HTTP/1.1 404 Not Found\r\n" +
+                                "Content-Length: 0\r\n" +
+                                "Connection: close\r\n" +
+                                "\r\n"
+                ).getBytes());
+                out.flush();
+                return false;
+            } else {
+                final var filePath = Path.of(".", "public", request.getPath());
                 final var mimeType = Files.probeContentType(filePath);
-
-                if (path.equals("/classic.html")) {
-                    final var template = Files.readString(filePath);
-                    final var content = template.replace(
-                            "{time}",
-                            LocalDateTime.now().toString()
-                    ).getBytes();
-                    out.write((
-                            "HTTP/1.1 200 OK\r\n" +
-                                    "Content-Type: " + mimeType + "\r\n" +
-                                    "Content-Length: " + content.length + "\r\n" +
-                                    "Connection: close\r\n" +
-                                    "\r\n"
-                    ).getBytes());
-                    out.write(content);
-                    out.flush();
-                }
-
                 final var length = Files.size(filePath);
                 out.write((
                         "HTTP/1.1 200 OK\r\n" +
@@ -93,11 +103,10 @@ public class Server {
                 ).getBytes());
                 Files.copy(filePath, out);
                 out.flush();
-            } catch (IOException e) {
-                e.printStackTrace();
             }
-        });
-
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+        return true;
     }
-
 }
