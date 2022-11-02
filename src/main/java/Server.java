@@ -37,8 +37,8 @@ public class Server {
 
     public void start() {
         try {
+            server = new ServerSocket(port);
             while (true) {
-                server = new ServerSocket(port);
                 accept();
             }
         } catch (IOException e) {
@@ -50,6 +50,10 @@ public class Server {
                 System.out.println(ex.getMessage());
             }
         }
+    }
+
+    public Map<String, ConcurrentHashMap<String, Handler>> getHandlers() {
+        return handlers;
     }
 
     public void accept() {
@@ -80,28 +84,20 @@ public class Server {
 
     public boolean send(Request request, BufferedOutputStream out) {
         try {
-            if (handlers.containsKey(request.getMethod()) &&
-                    handlers.get(request.getMethod()).containsKey(request.getPath())) {
-                out.write((
-                        "HTTP/1.1 404 Not Found\r\n" +
-                                "Content-Length: 0\r\n" +
-                                "Connection: close\r\n" +
-                                "\r\n"
-                ).getBytes());
+            if (handlers.containsKey(request.getMethod()) ||
+                    handlers.get(request.getMethod()).containsKey(request.getPath())
+            || handlers.get(request.getMethod()).get(request.getPath()) == null) {
+                String errorMsg = "HTTP/1.1 404 Not Found\r\n" +
+                        "Content-Length: 0\r\n" +
+                        "Connection: close\r\n" +
+                        "\r\n";
+                System.out.println(errorMsg);
+                out.write((errorMsg).getBytes());
                 out.flush();
                 return false;
             } else {
-                final var filePath = Path.of(".", "public", request.getPath());
-                final var mimeType = Files.probeContentType(filePath);
-                final var length = Files.size(filePath);
-                out.write((
-                        "HTTP/1.1 200 OK\r\n" +
-                                "Content-Type: " + mimeType + "\r\n" +
-                                "Content-Length: " + length + "\r\n" +
-                                "Connection: close\r\n" +
-                                "\r\n"
-                ).getBytes());
-                Files.copy(filePath, out);
+                Handler handler = handlers.get(request.getMethod()).get(request.getPath());
+                handler.handle(request, out);
                 out.flush();
             }
         } catch (IOException ex) {
