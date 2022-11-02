@@ -1,7 +1,5 @@
 import java.io.*;
 import java.net.ServerSocket;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.Map;
@@ -24,7 +22,7 @@ public class Server {
             handlers.put(method, new ConcurrentHashMap<>());
         }
         handlers.get(method).put(filename, handler);
-        File file = new File("./public/" + filename);
+        File file = new File("./public/" + filename.substring(0, filename.indexOf("?")));
         try {
             if (file.createNewFile()) {
                 System.out.println("Add new Handler: " + filename);
@@ -86,7 +84,7 @@ public class Server {
         try {
             if (handlers.containsKey(request.getMethod()) ||
                     handlers.get(request.getMethod()).containsKey(request.getPath())
-            || handlers.get(request.getMethod()).get(request.getPath()) == null) {
+                    || handlers.get(request.getMethod()).get(request.getPath()) == null) {
                 String errorMsg = "HTTP/1.1 404 Not Found\r\n" +
                         "Content-Length: 0\r\n" +
                         "Connection: close\r\n" +
@@ -106,3 +104,4 @@ public class Server {
         return true;
     }
 }
+
