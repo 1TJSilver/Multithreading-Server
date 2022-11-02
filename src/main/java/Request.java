@@ -1,8 +1,10 @@
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.apache.http.NameValuePair;
+import org.apache.http.client.utils.URLEncodedUtils;
 import org.apache.http.message.BasicNameValuePair;
 
 
@@ -24,16 +26,7 @@ public class Request {
         nameValueParams = getQueryParams();
     }
     public List<NameValuePair> getQueryParams(){
-        var stringList = path.substring(path.indexOf("?")).split("&");
-        int length = stringList.length;
-        List<NameValuePair> result = new ArrayList<>();
-
-        for (String nameValue : stringList) {
-            String name = nameValue.substring(0, nameValue.indexOf("="));
-            String value = nameValue.substring(nameValue.indexOf("="));
-            result.add(new BasicNameValuePair(name, value));
-        }
-        return result;
+        return URLEncodedUtils.parse(path, StandardCharsets.UTF_8);
     }
     public List<String> getQueryParam(String name){
         List<String> result = new ArrayList<>();
